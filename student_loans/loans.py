@@ -25,6 +25,10 @@ class Person:
     graduation_time: int                  # years until graduation
     income_appreciation: float = 0.03     #  year-over-year income growth (e.g., 3%)
     discretionary_factor: float = 0.1     # percentage of discretionary income
+    min_dti: float = 0.0
+    max_dti: float = 1.0
+    payoff_min_length: int = 0
+    payoff_max_length: int = 30
 
     def borrowed_amounts(self) -> List[float]:
         need = self.annual_attendance_cost - self.annual_personal_contribution
@@ -190,9 +194,10 @@ class FundingSource(ABC):
 
     def available_plans(self, person: Person) -> List[Tuple[float, List[Plan]]]:
         out = []
+        durations = range(person.payoff_min_length, person.payoff_max_length)
         for idx, amt in enumerate(person.borrowed_amounts()):
             principal = self.principal(amt, idx, person)
-            out.append((amt, self.plan_options(principal, person)))
+            out.append((amt, [plan for plan in self.plan_options(principal, person) if plan.term_years in durations]))
         return out
 
 def _federal_plans(principal: float, person: Person, rate) -> List[Plan]:
@@ -251,6 +256,7 @@ class PrivateLoanFactory(FundingSource):
         self.rate = annual_rate
         self.fee = origination_fee
         self.provider = provider
+        self.max_years = max_years
 
     def principal(self, borrow, idx, person):
          monthly = self.rate / 12
@@ -272,6 +278,7 @@ def minimize_total_paid(person: Person, funding_sources: List[FundingSource]
     """
     optimal = []
     total = sum(person.borrowed_amounts())
+    total_borrowed = 0.0
     for year_idx, need in enumerate(person.borrowed_amounts()):
         options: List[Tuple[float, int, FundingSource, float]] = []  # (full_amt, plan_idx, src, ratio)
         # gather base options
@@ -283,7 +290,7 @@ def minimize_total_paid(person: Person, funding_sources: List[FundingSource]
                 for idx, plan in enumerate(plans):
                     starting_payment = plan.monthly_payment(1, person)
 
-                    if (starting_payment * 12 * total / plan.principal) / person.starting_income > .3:
+                    if not (person.min_dti < (starting_payment * 12 * total / plan.principal) / person.starting_income < person.max_dti):
                         continue
                     total_paid = plan.compute_total_paid(person)
                     ratio = total_paid / full_amt if full_amt > 0 else math.inf
@@ -307,7 +314,11 @@ def minimize_total_paid(person: Person, funding_sources: List[FundingSource]
                 annual_attendance_cost=take,
                 graduation_time=person.graduation_time,
                 income_appreciation=person.income_appreciation,
-                discretionary_factor=person.discretionary_factor
+                discretionary_factor=person.discretionary_factor,
+                min_dti=person.min_dti,
+                max_dti=person.max_dti,
+                payoff_min_length=person.payoff_min_length,
+                payoff_max_length=person.payoff_max_length
             )
             # get new plan for this partial borrow
             temp_plans = src.available_plans(temp_person)[year_idx][1]
@@ -320,8 +331,14 @@ def minimize_total_paid(person: Person, funding_sources: List[FundingSource]
             if take > 0:
                 selected.append((take, new_plan, src))
             cum += take
+            total_borrowed += take
+
         optimal.append(selected)
-    return optimal
+
+    if total_borrowed < total:
+        return []
+    else:
+        return optimal
 
 # Predefined Sources
 FED_SUB = DirectSubsidizedFederal()
