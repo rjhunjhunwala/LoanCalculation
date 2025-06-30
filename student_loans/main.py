@@ -10,9 +10,8 @@ from loans import (
     DirectUnsubsidizedFederal,
     PrivateLoanFactory,
     minimize_total_paid
-
+    PLUS_UNSUB
 )
-from student_loans.loans import PLUS_UNSUB
 
 st.title("Optimal Student Loan Planning")
 
