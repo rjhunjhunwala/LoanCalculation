@@ -47,6 +47,7 @@ FED_UNSUB_SRC = DirectUnsubsidizedFederal()
 sources = [
     FED_SUB_SRC,
     FED_UNSUB_SRC,
+    PLUS_UNSUB
 ]
 
 st.sidebar.header("Financial Institution Details")
@@ -83,18 +84,22 @@ all_plans = [item for year in yearly_optimal for item in year]
 # --------------------------
 # Group & Sum Plans
 # --------------------------
-groups = defaultdict(lambda: {"amount": 0.0, "rep": None})
+groups = defaultdict(lambda: {"amount": 0.0, "rep": None,})
 for borrow, plan, src in all_plans:
-    key = (src.name(), plan.__class__.__name__)
+    key = (src.name(), plan.__class__.__name__,  plan.loan_terms())
+
     groups[key]["amount"] += borrow
-    # keep the last plan as representative
-    groups[key]["rep"] = plan
+
+    if groups[key]["rep"] is not None:
+        groups[key]["rep"] += plan
+    else:
+        groups[key]["rep"] = plan
 
 # --------------------------
 # Display Summarized Plans
 # --------------------------
 st.header("Selected plans: ")
-for (src_name, plan_name), info in groups.items():
+for (src_name, plan_name, _internal_name), info in groups.items():
 
 
     parts = re.findall(r'[A-Z][^A-Z]*', str(src_name))
@@ -107,10 +112,7 @@ for (src_name, plan_name), info in groups.items():
 
     total_borrowed = info["amount"]
     rep_plan = info["rep"]
-    # reset principal & cache
-    rep_plan.principal = total_borrowed
-    if hasattr(rep_plan, "total_paid"):
-        rep_plan.total_paid = None
+    initial_principal = rep_plan.principal
 
     total_paid = rep_plan.compute_total_paid(person)
     first_pmt   = rep_plan.monthly_payment(1, person)
@@ -119,6 +121,7 @@ for (src_name, plan_name), info in groups.items():
         st.write(f"**Rate:** {rep_plan.annual_rate*100:.2f}%")
         st.write(f"**Term:** {rep_plan.term_years} years")
         st.write(f"**First Month Payment:** ${first_pmt:,.2f}")
+        st.write(f"**Principal on Graduation:** ${initial_principal:,.2f}")
         st.write(f"**Total Paid:** ${total_paid:,.2f}")
         schedule = rep_plan.amortization_schedule(person)
         st.dataframe(schedule)

@@ -6,9 +6,11 @@ import math
 # --------------------------
 # Constants
 # --------------------------
-FEDERAL_RATE_SUBSIDIZED = 0.0653      # 4.5% fixed
-FEDERAL_RATE_UNSUBSIDIZED = 0.0653   # 4.75% fixed
+FEDERAL_RATE_SUBSIDIZED = 0.0653
+FEDERAL_RATE_UNSUBSIDIZED = 0.0653
 FEDERAL_ORIG_FEE = 0.01057           # 1.057% origination fee
+PLUS_UNSUB_RATE = 0.0894
+PLUS_ORIG_FEE = .04228
 
 # --------------------------
 # Person Data Model
@@ -60,6 +62,12 @@ class Plan(ABC):
 # Loan Base Class
 # --------------------------
 class Loan(Plan, ABC):
+    def loan_terms(self):
+        return f"{self.__class__.__name__}, {self.annual_rate}, {self.term_years}"
+
+    def __add__(self, other):
+        assert other.term_years == self.term_years and self.annual_rate == other.annual_rate and self.__class__ is other.__class__
+        return self.__class__(self.principal + other.principal, self.annual_rate, self.term_years)
     def __init__(self, principal: float, annual_rate: float, term_years: int):
         self.principal = principal
         self.annual_rate = annual_rate
@@ -132,14 +140,12 @@ class ExtendedPlan(StandardPlan):
         super().__init__(principal, annual_rate, term_years=25)
 
 class PAYEPlan(Loan):
-    def __init__(self, principal: float, person: Person, rate):
-        super().__init__(principal, rate, term_years=20)
-        self.person = person
-
+    def __init__(self, principal: float, rate, term_years=20):
+        super().__init__(principal, rate, term_years=term_years)
     def monthly_payment(self, month: int, person: Person) -> float:
         year = (month - 1) // 12
-        disc = self.person.discretionary_income(year)
-        return max((disc * self.person.discretionary_factor) / 12, 0)
+        disc = person.discretionary_income(year)
+        return max((disc * person.discretionary_factor) / 12, 0)
 
 class REPAYEPlan(PAYEPlan):
     def monthly_payment(self, month: int, person: Person) -> float:
@@ -149,17 +155,16 @@ class SAVEPlan(PAYEPlan):
     def monthly_payment(self, month: int, person: Person) -> float:
         # SAVE uses 5% discretionary
         year = (month - 1) // 12
-        disc = self.person.discretionary_income(year)
+        disc = person.discretionary_income(year)
         return max((disc * 0.05) / 12, 0)
 
 class ICRPlan(Loan):
-    def __init__(self, principal: float, person: Person, rate):
-        super().__init__(principal, rate, term_years=25)
-        self.person = person
+    def __init__(self, principal: float, rate, term_years = 25):
+        super().__init__(principal, rate, term_years=term_years)
 
     def monthly_payment(self, month: int, person: Person) -> float:
         year = (month - 1) // 12
-        disc = self.person.discretionary_income(year)
+        disc = person.discretionary_income(year)
         idr = (disc * 0.20) / 12
         twelve = StandardPlan(self.principal, self.annual_rate, term_years=12)
         std_pay = twelve.monthly_payment(month, person)
@@ -176,62 +181,64 @@ class FundingSource(ABC):
     def name(self):
         return self.__class__.__name__
 
+    def principal(self, borrow, idx, person):
+        return borrow
 
     @abstractmethod
+    def plan_options(self, principal, person):
+        return ...
+
     def available_plans(self, person: Person) -> List[Tuple[float, List[Plan]]]:
-        ...
+        out = []
+        for idx, amt in enumerate(person.borrowed_amounts()):
+            principal = self.principal(amt, idx, person)
+            out.append((amt, self.plan_options(principal, person)))
+        return out
 
 def _federal_plans(principal: float, person: Person, rate) -> List[Plan]:
     return [
         *[StandardPlan(principal, rate, term) for term in range(1, 11)],
         GraduatedPlan(principal, rate),
         ExtendedPlan(principal, rate),
-        PAYEPlan(principal, person, rate),
-        REPAYEPlan(principal, person, rate),
-        ICRPlan(principal, person, rate)
+        PAYEPlan(principal, rate),
+        REPAYEPlan(principal, rate),
+        ICRPlan(principal, rate)
     ]
 
 class DirectSubsidizedFederal(FundingSource):
     def limit(self, year, person):
         return (3500 + min(year, 2) * 1000) * int(person.subsidized_loan_eligible)
 
-    def available_plans(self, person: Person) -> List[Tuple[float, List[Plan]]]:
-        out = []
-        for idx, amt in enumerate(person.borrowed_amounts()):
-            borrow = amt
-            principal = borrow * (1 + FEDERAL_ORIG_FEE)
-            out.append((borrow, _federal_plans(principal, person, FEDERAL_RATE_SUBSIDIZED)))
-        return out
+    def principal(self, borrow, year, person):
+        return borrow * (1 + FEDERAL_ORIG_FEE)
+
+    def plan_options(self, principal, person):
+        return _federal_plans(principal, person, FEDERAL_RATE_SUBSIDIZED)
 
 class DirectUnsubsidizedFederal(FundingSource):
 
     def limit(self, year, person):
         return 2000
 
-    def available_plans(self, person: Person) -> List[Tuple[float, List[Plan]]]:
-        out = []
-        monthly = FEDERAL_RATE_UNSUBSIDIZED/12
+    def principal(self, borrow, year, person):
         total = person.graduation_time
-        for idx, amt in enumerate(person.borrowed_amounts()):
-            borrow = amt
-            principal = borrow * (1 + FEDERAL_ORIG_FEE) * ((1+monthly)**((total-idx)*12))
-            out.append((borrow, _federal_plans(principal, person, FEDERAL_RATE_UNSUBSIDIZED)))
-        return out
+        monthly = FEDERAL_RATE_UNSUBSIDIZED / 12
+        return borrow * (1 + FEDERAL_ORIG_FEE) * ((1+monthly)**((total-year)*12))
+
+    def plan_options(self, principal, person: Person) -> List[Tuple[float, List[Plan]]]:
+        return _federal_plans(principal, person, FEDERAL_RATE_UNSUBSIDIZED)
 
 class PlusFederal(FundingSource):
 
     def limit(self, year, person):
         return 1e9
 
-    def available_plans(self, person: Person) -> List[Tuple[float, List[Plan]]]:
-        out = []
-        monthly = FEDERAL_RATE_UNSUBSIDIZED/12
-        total = person.graduation_time
-        for idx, amt in enumerate(person.borrowed_amounts()):
-            borrow = amt
-            principal = borrow * (1 + FEDERAL_ORIG_FEE) * ((1+monthly)**((total-idx)*12))
-            out.append((borrow, _federal_plans(principal, person, .04 + FEDERAL_RATE_UNSUBSIDIZED)))
-        return out
+    def principal(self, borrow, idx, person):
+        monthly = PLUS_UNSUB_RATE/12
+        return borrow * (1 + PLUS_UNSUB_RATE) * ((1+monthly)**((person.graduation_time-idx)*12))
+
+    def plan_options(self, principal, person: Person):
+        return [StandardPlan(principal, PLUS_UNSUB_RATE, term) for term in range(1, 11)]
 
 class PrivateLoanFactory(FundingSource):
     provider: str = "Unknown"
@@ -245,15 +252,12 @@ class PrivateLoanFactory(FundingSource):
         self.fee = origination_fee
         self.provider = provider
 
-    def available_plans(self, person: Person) -> List[Tuple[float, List[Plan]]]:
-        out = []
-        monthly = self.rate/12
-        total = person.graduation_time
-        for idx, amt in enumerate(person.borrowed_amounts()):
-            principal = amt * (1+self.fee) * ((1+monthly)**((total-idx)*12))
-            plans = [StandardPlan(principal, self.rate, term) for term in range(1, self.max_years + 1)]
-            out.append((amt, plans))
-        return out
+    def principal(self, borrow, idx, person):
+         monthly = self.rate / 12
+         return borrow * (1+self.fee) * ((1+monthly)**((person.graduation_time-idx)*12))
+
+    def plan_options(self, principal, person: Person):
+        return [StandardPlan(principal, self.rate, term) for term in range(1, self.max_years + 1)]
 
 # --------------------------
 # Optimization
@@ -307,7 +311,9 @@ def minimize_total_paid(person: Person, funding_sources: List[FundingSource]
             )
             # get new plan for this partial borrow
             temp_plans = src.available_plans(temp_person)[year_idx][1]
+            print(src.available_plans(temp_person))
             new_plan = temp_plans[plan_idx]
+            print(new_plan.principal)
             # clear cached
             if hasattr(new_plan, 'total_paid'):
                 new_plan.total_paid = None
