@@ -9,7 +9,7 @@ from loans import (
     DirectSubsidizedFederal,
     DirectUnsubsidizedFederal,
     PrivateLoanFactory,
-    minimize_total_paid
+    minimize_total_paid,
     PLUS_UNSUB
 )
 
