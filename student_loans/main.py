@@ -3,6 +3,14 @@ from collections import defaultdict
 import pandas as pd
 import re
 
+# Group things into expanders...
+# Simplify Wording
+# Cost of attendance: -> Tuition, Room and Board, Scholarships
+# Parents Contribution Annual:
+# Starting annual income after college
+# Family Income -> Joint Parental income
+
+
 import loans
 from loans import (
     Person,
@@ -19,32 +27,19 @@ st.title("Optimal Student Loan Planning")
 # Borrower Details Input
 # --------------------------
 st.sidebar.header("Borrower Details")
-family_income = st.sidebar.number_input("Family Income (AGI)", value=50000.0, step=1000.0)
-subsidized_loan_eligible = st.sidebar.checkbox("I am qualified for subsidized loans", value = family_income <= 45000)
-starting_income = st.sidebar.number_input("Starting Annual Income", value=40000.0, step=1000.0)
-personal_contrib = st.sidebar.number_input("Annual Personal Contribution", value=10000.0, step=500.0)
-attendance_cost = st.sidebar.number_input("Annual Attendance Cost Net of Aid", value=20000.0, step=500.0)
-graduation_time = st.sidebar.number_input("Years in School", min_value=1, max_value=10, value=4)
+subsidized_loan_eligible = st.sidebar.checkbox("I am qualified for subsidized loans", value = True)
+starting_income = st.sidebar.number_input("Expected Income After Graduation", value=40000.0, step=1000.0)
+personal_contrib = st.sidebar.number_input("Parent Contribution Annual", value=10000.0, step=500.0)
+attendance_cost = st.sidebar.number_input("Tuition + Room/Board - Scholarships", value=20000.0, step=500.0)
 
-payoff_min_length, payoff_max_length = st.sidebar.slider("Select a number of years you are willing to wait to pay off your debt. ", 1, 30, (1, 30))
+with st.sidebar.expander("Timelines"):
+    graduation_time = st.number_input("Years in School", min_value=1, max_value=10, value=4)
 
-min_dti, max_dti = st.sidebar.slider("Select a debt to income range.\n We recommend you put no more than 30% of income to debt servicing. ", min_value=0.0, max_value=1.0, value=(0.0, 0.30))
-st.sidebar.write("We will use these parameters to find a debt payoff plan within your constraints that minimizes the amount of **lifetime total interest** paid. ")
+    payoff_min_length, payoff_max_length = st.slider("Select a number of years you are willing to wait to pay off your debt. ", 1, 30, (1, 30))
 
-num_banks = st.sidebar.number_input("Number of plans to consider:", value = 1, step = 1)
+    min_dti, max_dti = st.slider("Select a debt to income range.\n We recommend you put no more than 30% of income to debt servicing. ", min_value=0.0, max_value=1.0, value=(0.0, 0.30))
+    st.write("We will use these parameters to find a debt payoff plan within your constraints that minimizes the amount of **lifetime total interest** paid. ")
 
-
-# --------------------------
-# Interest Rates Input
-# --------------------------
-st.sidebar.header("Federal Interest Rates")
-subs_rate = st.sidebar.number_input("Federal Subsidized Rate (%)", value=loans.FEDERAL_RATE_SUBSIDIZED*100, step=0.1)/100
-unsubs_rate = st.sidebar.number_input("Federal Unsubsidized Rate (%)", value=loans.FEDERAL_RATE_UNSUBSIDIZED*100, step=0.1)/100
-
-
-# override module constants, (bad)
-loans.FEDERAL_RATE_SUBSIDIZED   = subs_rate
-loans.FEDERAL_RATE_UNSUBSIDIZED = unsubs_rate
 
 FED_SUB_SRC   = DirectSubsidizedFederal()
 FED_UNSUB_SRC = DirectUnsubsidizedFederal()
@@ -55,21 +50,22 @@ sources = [
     PLUS_UNSUB
 ]
 
-st.sidebar.header("Financial Institution Details")
+with st.sidebar.expander("Explore Private Loans"):
+    num_banks = st.number_input("Number of private loans to consider", value = 0, step = 1)
 
-for i in range(num_banks):
-    st.sidebar.header(f"Bank {i + 1}")
-    bank_name = st.sidebar.text_input(f"Bank {i + 1} Name", f"Bank {i + 1}")
-    bank_rate = st.sidebar.number_input(f"{bank_name} rate (%)", value=unsubs_rate * 100 + 2, step=0.1)/100
-    max_years = st.sidebar.number_input(f"{bank_name} term duration", value=10, step=1)
-    bank_src   = PrivateLoanFactory(bank_name, bank_rate, max_years=max_years)
-    sources.append(bank_src)
+    for i in range(num_banks):
+        st.header(f"Bank {i + 1}")
+        bank_name = st.text_input(f"Bank {i + 1} Name", f"Bank {i + 1}")
+        bank_rate = st.number_input(f"{bank_name} rate (%)", value=10.0, step=0.1)/100
+        max_years = st.number_input(f"{bank_name} term duration", value=10, step=1)
+        bank_src   = PrivateLoanFactory(bank_name, bank_rate, max_years=max_years)
+        sources.append(bank_src)
 
 # --------------------------
 # Create Person
 # --------------------------
 person = Person(
-    family_income=family_income,
+    family_income=0,
     subsidized_loan_eligible=subsidized_loan_eligible,
     starting_income=starting_income,
     annual_personal_contribution=personal_contrib,
