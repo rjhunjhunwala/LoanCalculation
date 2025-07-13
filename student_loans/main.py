@@ -10,7 +10,6 @@ import re
 # Starting annual income after college
 # Family Income -> Joint Parental income
 
-
 import loans
 from loans import (
     Person,
@@ -27,38 +26,67 @@ st.title("Optimal Student Loan Planning")
 # Borrower Details Input
 # --------------------------
 with st.expander("Borrower Details"):
-    subsidized_loan_eligible = st.checkbox("I am qualified for subsidized loans", value = False)
-    gov_loan_eligible = st.checkbox("I am attending an accredited undergrad college or university. ", value = True)
-    graduation_time = st.number_input("Years in School", min_value=1, max_value=10, value=4)
-    starting_income = st.number_input("Expected Income After Graduation", value=50000, step=1000, format="%d", min_value=0)
-
+    subsidized_loan_eligible = st.checkbox("I am qualified for subsidized loans", value = False,
+        help="Subsidized loans do not accrue interest while you're in school at least half-time.")
+    gov_loan_eligible = st.checkbox("I am attending an accredited undergrad college or university. ", value = True,
+        help="Check if you attend an accredited institution to qualify for federal loans.")
+    graduation_time = st.number_input("Years in School", min_value=1, max_value=10, value=4,
+        help="Expected number of years you will be in school before graduation.")
+    starting_income = st.number_input("Expected Income After Graduation", value=50000, step=1000, format="%d", min_value=0,
+        help="Estimated annual salary for your first year after graduating.")
 
 with st.expander("Expenses"):
-    tuition = st.number_input("Tuition", value=15000, step=500, format="%d", min_value=0)
-    expenses = st.number_input("Eligible Personal Expenses (Commute, books, food)", value=2500, step=500, format="%d", min_value=0)
-    room_board = st.number_input("Housing/ Room + Board", value=15000 , min_value=0)
-
+    tuition = st.number_input("Tuition", value=15000, step=500, format="%d", min_value=0,
+        help="Annual tuition cost charged by your college or university.")
+    expenses = st.number_input("Eligible Personal Expenses (Commute, books, food)", value=2500, step=500, format="%d", min_value=0,
+        help="Annual costs for books, food, transportation, and other educational expenses.")
+    room_board = st.number_input("Housing/ Room + Board", value=15000 , min_value=0,
+        help="Estimated annual cost of housing and meals.")
 
 with st.expander("Payments"):
-    parent_contribution = st.number_input("Parent Contribution Annual", value=10000, step=500, format="%d", min_value=0)
-    student_contribution = st.number_input("Student Contribution Annual", value=0, step=500, format="%d", min_value=0)
-    employment_contribution = st.number_input("Student Employment Annual Income", value=0, step=500, format="%d", min_value=0, help="Income from work-study, internships, or part time employment. ")
+    parent_contribution = st.number_input("Parent Contribution Annual", value=10000, step=500, format="%d", min_value=0,
+        help="How much your parents or guardians can contribute each year.")
+    student_contribution = st.number_input("Student Contribution Annual", value=0, step=500, format="%d", min_value=0,
+        help="How much you can contribute from personal savings each year.")
+    employment_contribution = st.number_input("Student Employment Annual Income", value=0, step=500, format="%d", min_value=0,
+        help="Income from work-study, internships, or part time employment.")
+
     personal_contrib = parent_contribution + student_contribution + employment_contribution
 
-    scholarships = st.number_input("Scholarships or Grant Financial Aid", value=0, min_value=0)
-    if st.checkbox("One Time Grant:"):
-        scholarships /= graduation_time
+    num_scholarships = st.number_input("Number of Scholarships Awarded", value = 1, step = 1, min_value=0,
+            help="Enter the number of different private loan offers you'd like to compare.")
 
-attendance_cost = tuition + expenses + room_board - scholarships
+    total_scholarships = 0
+
+    for i in range(num_scholarships):
+
+
+
+        scholarship = st.number_input(f"Scholarships or Grant Financial Aid: Source #{i + 1}", value=0, min_value=0,
+            help="Annual amount of scholarships or need-based grant aid received from this source.")
+
+        if st.checkbox(f"#{i + 1} One Time Grant: ", help="Check this if this scholarship or grant is only awarded once and not repeated annually."):
+            total_scholarships += scholarship / graduation_time
+        else:
+            total_scholarships += scholarship
+
+attendance_cost = tuition + expenses + room_board - total_scholarships
 
 with st.expander("Timelines"):
+    payoff_min_length, payoff_max_length = st.slider(
+        "Select a number of years you are willing to wait to pay off your debt. ",
+        1, 30, (1, 30),
+        help="Minimum and maximum number of years you'd be comfortable repaying your loans over."
+    )
 
-    payoff_min_length, payoff_max_length = st.slider("Select a number of years you are willing to wait to pay off your debt. ", 1, 30, (1, 30))
-
-    min_dti, max_dti = st.slider("What percent of your income could you spare to pay these loans? Most banks like to see no more than 30%.  ", min_value=0, max_value=100, value=(0, 30), step = 1)
+    min_dti, max_dti = st.slider(
+        "What percent of your income could you spare to pay these loans? Most banks like to see no more than 30%.  ",
+        min_value=0, max_value=100, value=(0, 30), step = 1,
+        help="Debt-to-Income ratio (DTI) is the percentage of income you are willing to spend on monthly loan payments."
+    )
     min_dti, max_dti = min_dti / 100, max_dti / 100
-    st.write("We will find a debt payoff plan within your constraints to minimize **lifetime total interest** paid. ")
 
+    st.write("We will find a debt payoff plan within your constraints to minimize **lifetime total interest** paid.")
 
 FED_SUB_SRC   = DirectSubsidizedFederal()
 FED_UNSUB_SRC = DirectUnsubsidizedFederal()
@@ -73,13 +101,16 @@ else:
     sources = []
 
 with st.expander("Explore Private Loans"):
-    num_banks = st.number_input("Number of private loans to consider", value = 0, step = 1)
+    num_banks = st.number_input("Number of private loans to consider", value = 0, step = 1, min_value=0,
+        help="Enter the number of different private loan offers you'd like to compare.")
 
     for i in range(num_banks):
         st.header(f"Bank {i + 1}")
         bank_name = st.text_input(f"Bank {i + 1} Name", f"Bank {i + 1}")
-        bank_rate = st.number_input(f"{bank_name} rate (%)", value=10.0, step=0.1, min_value=0)/100
-        max_years = st.number_input(f"{bank_name} term duration", value=10, step=1, min_value=0)
+        bank_rate = st.number_input(f"{bank_name} rate (%)", value=10.0, step=0.1, min_value=0.0,
+            help="Annual interest rate (APR) for this private loan.") / 100
+        max_years = st.number_input(f"{bank_name} term duration", value=10, step=1, min_value=0,
+            help="Number of years you have to pay off this loan.")
         bank_src   = PrivateLoanFactory(bank_name, bank_rate, max_years=max_years)
         sources.append(bank_src)
 
@@ -133,7 +164,6 @@ else:
         # --------------------------
         st.header("Selected plans: ")
         for (src_name, plan_name, _internal_name), info in groups.items():
-
 
             parts = re.findall(r'[A-Z][^A-Z]*', str(src_name))
             if parts:
