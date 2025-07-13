@@ -28,7 +28,7 @@ st.title("Optimal Student Loan Planning")
 with st.expander("Borrower Details"):
     subsidized_loan_eligible = st.checkbox("I am qualified for subsidized loans", value = False,
         help="Subsidized loans do not accrue interest while you're in school at least half-time.")
-    gov_loan_eligible = st.checkbox("I am attending an accredited undergrad college or university. ", value = True,
+    gov_loan_eligible = st.checkbox("I am attending an accredited undergrad college or university and am interested in federal loans. ", value = True,
         help="Check if you attend an accredited institution to qualify for federal loans.")
     graduation_time = st.number_input("Years in School", min_value=1, max_value=10, value=4,
         help="Expected number of years you will be in school before graduation.")
