@@ -105,7 +105,7 @@ with st.expander("Explore Private Loans"):
 
     for i in range(num_banks):
         st.header(f"Private Loan {i + 1}")
-        bank_name = st.text_input(f"Private Loan {i + 1} Name", f"Bank {i + 1}")
+        bank_name = st.text_input(f"Private Loan {i + 1} Name", f"Private Loan {i + 1}")
         bank_rate = st.number_input(f"{bank_name} rate (%)", value=10.0, step=0.1, min_value=0.0,
             help="Annual interest rate (APR) for this private loan.") / 100
         max_years = st.number_input(f"{bank_name} term duration", value=10, step=1, min_value=0,
