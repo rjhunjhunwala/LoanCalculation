@@ -35,7 +35,7 @@ with st.expander("Borrower Details"):
     starting_income = st.number_input("Expected Income After Graduation", value=50000, step=1000, format="%d", min_value=0,
         help="Estimated annual salary for your first year after graduating.")
 
-with st.expander("Expenses"):
+with st.expander("Expenses", expanded=True):
     tuition = st.number_input("Tuition", value=15000, step=500, format="%d", min_value=0,
         help="Annual tuition cost charged by your college or university.")
     expenses = st.number_input("Eligible Personal Expenses (Commute, books, food)", value=2500, step=500, format="%d", min_value=0,
@@ -44,7 +44,7 @@ with st.expander("Expenses"):
         help="Estimated annual cost of housing and meals.")
 
 with st.expander("Payments"):
-    parent_contribution = st.number_input("Parent Contribution Annual", value=10000, step=500, format="%d", min_value=0,
+    parent_contribution = st.number_input("Parent Contribution Annual", value=0, step=500, format="%d", min_value=0,
         help="How much your parents or guardians can contribute each year.")
     student_contribution = st.number_input("Student Contribution Annual", value=0, step=500, format="%d", min_value=0,
         help="How much you can contribute from personal savings each year.")
@@ -53,7 +53,7 @@ with st.expander("Payments"):
 
     personal_contrib = parent_contribution + student_contribution + employment_contribution
 
-    num_scholarships = st.number_input("Number of Scholarships Awarded", value = 1, step = 1, min_value=0,
+    num_scholarships = st.number_input("Number of Scholarships Awarded", value = 0, step = 1, min_value=0,
             help="Enter the number of different private loan offers you'd like to compare.")
 
     total_scholarships = 0
@@ -214,9 +214,12 @@ else:
             # convert to DataFrame
             df = pd.DataFrame([
                 {
-                    "month": m,
-                    **vals,
+                    "Payment Month": m,
+                    "Payment":  f"${vals["payment"]:,.0f}",
+                    "Interest":  f"${vals["interest_paid"]:,.0f}",
+                    "Principal Paid":  f"${vals["principal_paid"]:,.0f}",
+                    "Balance":  f"${vals["balance"]:,.0f}"
                 }
                 for m, vals in sorted(combined.items())
             ])
-            st.dataframe(df)
+            st.dataframe(df, hide_index=True)
