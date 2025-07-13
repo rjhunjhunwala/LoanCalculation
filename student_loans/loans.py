@@ -240,7 +240,7 @@ class PlusFederal(FundingSource):
 
     def principal(self, borrow, idx, person):
         monthly = PLUS_UNSUB_RATE/12
-        return borrow * (1 + PLUS_UNSUB_RATE) * ((1+monthly)**((person.graduation_time-idx)*12))
+        return borrow * (1 + PLUS_ORIG_FEE) * ((1+monthly)**((person.graduation_time-idx)*12))
 
     def plan_options(self, principal, person: Person):
         return [StandardPlan(principal, PLUS_UNSUB_RATE, term) for term in range(1, 11)]
