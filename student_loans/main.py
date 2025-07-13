@@ -26,38 +26,60 @@ st.title("Optimal Student Loan Planning")
 # --------------------------
 # Borrower Details Input
 # --------------------------
-st.sidebar.header("Borrower Details")
-subsidized_loan_eligible = st.sidebar.checkbox("I am qualified for subsidized loans", value = True)
-starting_income = st.sidebar.number_input("Expected Income After Graduation", value=40000.0, step=1000.0)
-personal_contrib = st.sidebar.number_input("Parent Contribution Annual", value=10000.0, step=500.0)
-attendance_cost = st.sidebar.number_input("Tuition + Room/Board - Scholarships", value=20000.0, step=500.0)
-
-with st.sidebar.expander("Timelines"):
+with st.expander("Borrower Details"):
+    subsidized_loan_eligible = st.checkbox("I am qualified for subsidized loans", value = False)
+    gov_loan_eligible = st.checkbox("I am attending an accredited undergrad college or university. ", value = True)
     graduation_time = st.number_input("Years in School", min_value=1, max_value=10, value=4)
+    starting_income = st.number_input("Expected Income After Graduation", value=50000, step=1000, format="%d", min_value=0)
+
+
+with st.expander("Expenses"):
+    tuition = st.number_input("Tuition", value=15000, step=500, format="%d", min_value=0)
+    expenses = st.number_input("Eligible Personal Expenses (Commute, books, food)", value=2500, step=500, format="%d", min_value=0)
+    room_board = st.number_input("Housing/ Room + Board", value=15000 , min_value=0)
+
+
+with st.expander("Payments"):
+    parent_contribution = st.number_input("Parent Contribution Annual", value=10000, step=500, format="%d", min_value=0)
+    student_contribution = st.number_input("Student Contribution Annual", value=0, step=500, format="%d", min_value=0)
+    employment_contribution = st.number_input("Student Employment Annual Income", value=0, step=500, format="%d", min_value=0, help="Income from work-study, internships, or part time employment. ")
+    personal_contrib = parent_contribution + student_contribution + employment_contribution
+
+    scholarships = st.number_input("Scholarships or Grant Financial Aid", value=0, min_value=0)
+    if st.checkbox("One Time Grant:"):
+        scholarships /= graduation_time
+
+attendance_cost = tuition + expenses + room_board - scholarships
+
+with st.expander("Timelines"):
 
     payoff_min_length, payoff_max_length = st.slider("Select a number of years you are willing to wait to pay off your debt. ", 1, 30, (1, 30))
 
-    min_dti, max_dti = st.slider("Select a debt to income range.\n We recommend you put no more than 30% of income to debt servicing. ", min_value=0.0, max_value=1.0, value=(0.0, 0.30))
-    st.write("We will use these parameters to find a debt payoff plan within your constraints that minimizes the amount of **lifetime total interest** paid. ")
+    min_dti, max_dti = st.slider("What percent of your income could you spare to pay these loans? Most banks like to see no more than 30%.  ", min_value=0, max_value=100, value=(0, 30), step = 1)
+    min_dti, max_dti = min_dti / 100, max_dti / 100
+    st.write("We will find a debt payoff plan within your constraints to minimize **lifetime total interest** paid. ")
 
 
 FED_SUB_SRC   = DirectSubsidizedFederal()
 FED_UNSUB_SRC = DirectUnsubsidizedFederal()
 
-sources = [
-    FED_SUB_SRC,
-    FED_UNSUB_SRC,
-    PLUS_UNSUB
-]
+if gov_loan_eligible:
+    sources = [
+        FED_SUB_SRC,
+        FED_UNSUB_SRC,
+        PLUS_UNSUB
+    ]
+else:
+    sources = []
 
-with st.sidebar.expander("Explore Private Loans"):
+with st.expander("Explore Private Loans"):
     num_banks = st.number_input("Number of private loans to consider", value = 0, step = 1)
 
     for i in range(num_banks):
         st.header(f"Bank {i + 1}")
         bank_name = st.text_input(f"Bank {i + 1} Name", f"Bank {i + 1}")
-        bank_rate = st.number_input(f"{bank_name} rate (%)", value=10.0, step=0.1)/100
-        max_years = st.number_input(f"{bank_name} term duration", value=10, step=1)
+        bank_rate = st.number_input(f"{bank_name} rate (%)", value=10.0, step=0.1, min_value=0)/100
+        max_years = st.number_input(f"{bank_name} term duration", value=10, step=1, min_value=0)
         bank_src   = PrivateLoanFactory(bank_name, bank_rate, max_years=max_years)
         sources.append(bank_src)
 
@@ -87,7 +109,7 @@ else:
     yearly_optimal = minimize_total_paid(person, sources)
 
     if not yearly_optimal:
-        st.write("We can't find a set of student loans that meet your needs. ")
+        st.write("We can't find a set of student loans that meet your needs. Please adjust your debt to income or payoff timelines. ")
     else:
         # flatten
         all_plans = [item for year in yearly_optimal for item in year]
@@ -144,7 +166,7 @@ else:
         total_borrowed_all = sum(info["amount"] for info in groups.values())
         total_paid_all     = sum(info["rep"].compute_total_paid(person) for info in groups.values())
 
-        with st.expander("Show Combined Summary"):
+        with st.expander("Show Combined Summary", expanded=True):
             st.write(f"**Total Borrowed Across All Plans:** ${total_borrowed_all:,.2f}")
             st.write(f"**Total Paid Across All Plans:** ${total_paid_all:,.2f}")
             # build a combined amortization by summing month-by-month
@@ -153,17 +175,17 @@ else:
                 sched = info["rep"].amortization_schedule(person)
                 for row in sched:
                     m = row["month"]
-                    combined.setdefault(m, {"payment": 0.0, "interest_paid": 0.0, "principal_paid": 0.0})
+                    combined.setdefault(m, {"payment": 0.0, "interest_paid": 0.0, "principal_paid": 0.0, "balance": 0.0})
                     combined[m]["payment"]       += row["payment"]
                     combined[m]["interest_paid"] += row["interest_paid"]
                     combined[m]["principal_paid"]+= row["principal_paid"]
+                    combined[m]["balance"] += row["balance"]
 
             # convert to DataFrame
             df = pd.DataFrame([
                 {
                     "month": m,
                     **vals,
-                    "balance": ""  # omitted for aggregate
                 }
                 for m, vals in sorted(combined.items())
             ])
