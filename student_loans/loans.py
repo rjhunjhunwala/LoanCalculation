@@ -29,6 +29,7 @@ class Person:
     max_dti: float = 1.0
     payoff_min_length: int = 0
     payoff_max_length: int = 30
+    existing_loans: List["Plan"] = field(default_factory=lambda:[])
 
     def borrowed_amounts(self) -> List[float]:
         need = self.annual_attendance_cost - self.annual_personal_contribution
@@ -279,6 +280,9 @@ def minimize_total_paid(person: Person, funding_sources: List[FundingSource]
     optimal = []
     total = sum(person.borrowed_amounts())
     total_borrowed = 0.0
+
+    existing_payment = sum(plan.monthly_payment(1, person) for balance, plan, src in person.existing_loans)
+
     for year_idx, need in enumerate(person.borrowed_amounts()):
         options: List[Tuple[float, int, FundingSource, float]] = []  # (full_amt, plan_idx, src, ratio)
         # gather base options
@@ -289,6 +293,8 @@ def minimize_total_paid(person: Person, funding_sources: List[FundingSource]
                 plan_options = []
                 for idx, plan in enumerate(plans):
                     starting_payment = plan.monthly_payment(1, person)
+
+                    remain_income = person.starting_income - existing_payment / person.max_dti
 
                     if not (person.min_dti < (starting_payment * 12 * total / plan.principal) / person.starting_income < person.max_dti):
                         continue

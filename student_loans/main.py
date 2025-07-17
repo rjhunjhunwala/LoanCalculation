@@ -2,6 +2,7 @@ import streamlit as st
 from collections import defaultdict
 import pandas as pd
 import re
+from dataclasses import dataclass, field
 
 # Group things into expanders...
 # Simplify Wording
@@ -15,6 +16,7 @@ from loans import (
     Person,
     DirectSubsidizedFederal,
     DirectUnsubsidizedFederal,
+    StandardPlan,
     PrivateLoanFactory,
     minimize_total_paid,
     PLUS_UNSUB
@@ -31,7 +33,7 @@ with st.expander("Borrower Details"):
     gov_loan_eligible = st.checkbox("I am attending an accredited undergrad college or university and am interested in federal loans. ", value = True,
         help="Check if you attend an accredited institution to qualify for federal loans.")
     graduation_time = st.number_input("Years in School", min_value=1, max_value=10, value=4,
-        help="Expected number of years you will be in school before graduation.")
+        help="Expected number of years left in school before graduation.")
     starting_income = st.number_input("Expected Income After Graduation", value=50000, step=1000, format="%d", min_value=0,
         help="Estimated annual salary for your first year after graduating.")
 
@@ -112,6 +114,37 @@ with st.expander("Explore Private Loans"):
             help="Number of years you have to pay off this loan.")
         bank_src   = PrivateLoanFactory(bank_name, bank_rate, max_years=max_years)
         sources.append(bank_src)
+@dataclass
+class UserDefinedSource():
+    _name: str
+
+    def name(self):
+        return self._name
+
+with st.expander("Current loan balances", expanded=True):
+    existing_loans = []
+    num_loans = st.number_input("Number of current loans: ", value = 0, step = 1, min_value=0,
+            help="If you are already in college, you might have outstanding loans. ")
+    for loan in range(1, num_loans + 1):
+        curr_balance = st.number_input(f"Current Balance on loan {loan}", min_value=0.0, step = 1.0, help="Current Balance on This Loan")
+        bank_name = st.text_input(f"Existing Loan {loan} Name", f"Existing Loan {loan}")
+
+        rate = st.number_input(f"Loan {loan} rate (%)", value=10.0, step=0.1, min_value=0.0,
+                    help="Annual interest rate (APR) for this private loan.") / 100
+        subsidized_loan = st.checkbox(f"Loan {loan} does not accrue interest while in school  ", value = False,
+                help="Subsidized loans do not accrue interest while you're in school at least half-time.")
+        term = st.number_input(f"Loan {loan} Term:. ", value = 10, step = 1, min_value=0,
+                    help="How long do you have to pay this loan off. ")
+
+        if subsidized_loan:
+            balance = curr_balance
+        else:
+            balance = curr_balance * ( 1 + rate) ** graduation_time
+
+        existing_loans.append((curr_balance, StandardPlan(balance, rate, term), UserDefinedSource(bank_name)))
+
+
+
 
 # --------------------------
 # Create Person
@@ -126,7 +159,8 @@ person = Person(
     min_dti= min_dti,
     max_dti=max_dti,
     payoff_min_length=payoff_min_length,
-    payoff_max_length=payoff_max_length
+    payoff_max_length=payoff_max_length,
+    existing_loans=existing_loans
 )
 
 # --------------------------
@@ -142,7 +176,7 @@ else:
         st.write("We can't find a set of student loans that meet your needs. Please adjust your debt to income or payoff timelines. ")
     else:
         # flatten
-        all_plans = [item for year in yearly_optimal for item in year]
+        all_plans = existing_loans + [item for year in yearly_optimal for item in year]
 
         # --------------------------
         # Group & Sum Plans
