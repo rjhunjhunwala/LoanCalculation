@@ -22,6 +22,25 @@ from loans import (
     PLUS_UNSUB
 )
 
+def add_currency_to_input(label, cur_symbol='$'):
+    st.markdown(
+        f"""
+        <style>
+            [aria-label="{label}"] {{
+                padding-left: 20px;
+            }}
+            [data-testid="stNumberInput"]:has([aria-label="{label}"])::before {{
+                position: absolute;
+                content: "{cur_symbol}";
+                left:10px;
+                top:35px;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 st.title("Optimal Student Loan Planning")
 
 # --------------------------
@@ -38,20 +57,29 @@ with st.expander("Borrower Details"):
         help="Estimated annual salary for your first year after graduating.")
 
 with st.expander("Expenses", expanded=True):
-    tuition = st.number_input("Tuition", value=15000, step=500, format="%d", min_value=0,
+    tuition = st.number_input(label:="Tuition", value=15000, step=500, format="%d", min_value=0,
         help="Annual tuition cost charged by your college or university.")
-    expenses = st.number_input("Eligible Personal Expenses (Commute, books, food)", value=2500, step=500, format="%d", min_value=0,
+    add_currency_to_input(label)
+
+    expenses = st.number_input(label:="Eligible Personal Expenses (Commute, books, food)", value=2500, step=500, format="%d", min_value=0,
         help="Annual costs for books, food, transportation, and other educational expenses.")
-    room_board = st.number_input("Housing/ Room + Board", value=15000 , min_value=0,
+    add_currency_to_input(label)
+    room_board = st.number_input(label:="Housing/ Room + Board", value=15000 , min_value=0,
         help="Estimated annual cost of housing and meals.")
 
+    add_currency_to_input(label)
+
 with st.expander("Payments"):
-    parent_contribution = st.number_input("Parent Contribution Annual", value=0, step=500, format="%d", min_value=0,
+    parent_contribution = st.number_input(label:="Parent Contribution Annual", value=0, step=500, format="%d", min_value=0,
         help="How much your parents or guardians can contribute each year.")
-    student_contribution = st.number_input("Student Contribution Annual", value=0, step=500, format="%d", min_value=0,
+    add_currency_to_input(label)
+    student_contribution = st.number_input(label:="Student Contribution Annual", value=0, step=500, format="%d", min_value=0,
         help="How much you can contribute from personal savings each year.")
-    employment_contribution = st.number_input("Student Employment Annual Income", value=0, step=500, format="%d", min_value=0,
+    add_currency_to_input(label)
+    employment_contribution = st.number_input(label:="Student Employment Annual Income", value=0, step=500, format="%d", min_value=0,
         help="Income from work-study, internships, or part time employment.")
+    add_currency_to_input(label)
+
 
     personal_contrib = parent_contribution + student_contribution + employment_contribution
 
@@ -126,7 +154,8 @@ with st.expander("Current loan balances", expanded=True):
     num_loans = st.number_input("Number of current loans: ", value = 0, step = 1, min_value=0,
             help="If you are already in college, you might have outstanding loans. ")
     for loan in range(1, num_loans + 1):
-        curr_balance = st.number_input(f"Current Balance on loan {loan}", min_value=0.0, step = 1.0, help="Current Balance on This Loan")
+        curr_balance = st.number_input(label:=f"Current Balance on loan {loan}", min_value=0.0, step = 1.0, help="Current Balance on This Loan")
+        add_currency_to_input(label)
         bank_name = st.text_input(f"Existing Loan {loan} Name", f"Existing Loan {loan}")
 
         rate = st.number_input(f"Loan {loan} rate (%)", value=10.0, step=0.1, min_value=0.0,
