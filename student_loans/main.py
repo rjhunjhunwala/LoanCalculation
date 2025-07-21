@@ -72,6 +72,7 @@ with st.expander("Expenses", expanded=True):
 with st.expander("Explore Private Loans"):
     num_banks = st.number_input("Number of private loans to consider", value = 0, step = 1, min_value=0,
         help="Enter the number of different private loan offers you'd like to compare.")
+    sources = []
 
     for i in range(num_banks):
         st.header(f"Private Loan {i + 1}")
