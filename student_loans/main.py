@@ -69,6 +69,20 @@ with st.expander("Expenses", expanded=True):
 
     add_currency_to_input(label)
 
+with st.expander("Explore Private Loans"):
+    num_banks = st.number_input("Number of private loans to consider", value = 0, step = 1, min_value=0,
+        help="Enter the number of different private loan offers you'd like to compare.")
+
+    for i in range(num_banks):
+        st.header(f"Private Loan {i + 1}")
+        bank_name = st.text_input(f"Private Loan {i + 1} Name", f"Private Loan {i + 1}")
+        bank_rate = st.number_input(f"{bank_name} rate (%)", value=10.0, step=0.1, min_value=0.0,
+            help="Annual interest rate (APR) for this private loan.") / 100
+        max_years = st.number_input(f"{bank_name} term duration", value=10, step=1, min_value=0,
+            help="Number of years you have to pay off this loan.")
+        bank_src   = PrivateLoanFactory(bank_name, bank_rate, max_years=max_years)
+        sources.append(bank_src)
+
 with st.expander("Payments"):
     parent_contribution = st.number_input(label:="Parent Contribution Annual", value=0, step=500, format="%d", min_value=0,
         help="How much your parents or guardians can contribute each year.")
@@ -92,8 +106,10 @@ with st.expander("Payments"):
 
 
 
-        scholarship = st.number_input(f"Scholarships or Grant Financial Aid: Source #{i + 1}", value=0, min_value=0,
+        scholarship = st.number_input(label:=f"Scholarships or Grant Financial Aid Amount: Source #{i + 1}", value=0, min_value=0,
             help="Annual amount of scholarships or need-based grant aid received from this source.")
+
+        add_currency_to_input(label)
 
         if st.checkbox(f"#{i + 1} One Time Grant: ", help="Check this if this scholarship or grant is only awarded once and not repeated annually."):
             total_scholarships += scholarship / graduation_time
@@ -104,13 +120,13 @@ attendance_cost = tuition + expenses + room_board - total_scholarships
 
 with st.expander("Timelines"):
     payoff_min_length, payoff_max_length = st.slider(
-        "Select a number of years you are willing to wait to pay off your debt. ",
+        "How many years do you plan to take to pay off your student loan debt. ",
         1, 30, (1, 30),
         help="Minimum and maximum number of years you'd be comfortable repaying your loans over."
     )
 
     min_dti, max_dti = st.slider(
-        "What percent of your income could you spare to pay these loans? Most banks like to see no more than 30%.  ",
+        "What percentage of your income can you allocate toward loan payments? Most lenders recommend keeping this below 30% of your gross income. ",
         min_value=0, max_value=100, value=(0, 30), step = 1,
         help="Debt-to-Income ratio (DTI) is the percentage of income you are willing to spend on monthly loan payments."
     )
@@ -129,19 +145,7 @@ if gov_loan_eligible:
 else:
     sources = []
 
-with st.expander("Explore Private Loans"):
-    num_banks = st.number_input("Number of private loans to consider", value = 0, step = 1, min_value=0,
-        help="Enter the number of different private loan offers you'd like to compare.")
 
-    for i in range(num_banks):
-        st.header(f"Private Loan {i + 1}")
-        bank_name = st.text_input(f"Private Loan {i + 1} Name", f"Private Loan {i + 1}")
-        bank_rate = st.number_input(f"{bank_name} rate (%)", value=10.0, step=0.1, min_value=0.0,
-            help="Annual interest rate (APR) for this private loan.") / 100
-        max_years = st.number_input(f"{bank_name} term duration", value=10, step=1, min_value=0,
-            help="Number of years you have to pay off this loan.")
-        bank_src   = PrivateLoanFactory(bank_name, bank_rate, max_years=max_years)
-        sources.append(bank_src)
 @dataclass
 class UserDefinedSource():
     _name: str
@@ -154,9 +158,9 @@ with st.expander("Current loan balances", expanded=True):
     num_loans = st.number_input("Number of current loans: ", value = 0, step = 1, min_value=0,
             help="If you are already in college, you might have outstanding loans. ")
     for loan in range(1, num_loans + 1):
-        curr_balance = st.number_input(label:=f"Current Balance on loan {loan}", min_value=0.0, step = 1.0, help="Current Balance on This Loan")
+        loan_name = st.text_input(f"Existing Loan {loan} Name", f"Existing Loan {loan}")
+        curr_balance = st.number_input(label:=f"Current Balance on loan_name", min_value=0.0, step = 1.0, help="Current Balance on This Loan")
         add_currency_to_input(label)
-        bank_name = st.text_input(f"Existing Loan {loan} Name", f"Existing Loan {loan}")
 
         rate = st.number_input(f"Loan {loan} rate (%)", value=10.0, step=0.1, min_value=0.0,
                     help="Annual interest rate (APR) for this private loan.") / 100
@@ -170,7 +174,7 @@ with st.expander("Current loan balances", expanded=True):
         else:
             balance = curr_balance * ( 1 + rate) ** graduation_time
 
-        existing_loans.append((curr_balance, StandardPlan(balance, rate, term), UserDefinedSource(bank_name)))
+        existing_loans.append((curr_balance, StandardPlan(balance, rate, term), UserDefinedSource(loan_name)))
 
 
 
