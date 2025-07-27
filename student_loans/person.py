@@ -15,6 +15,7 @@ class Person:
     payoff_min_length: int = 0
     payoff_max_length: int = 30
     existing_loans: list["Plan"] = field(default_factory=lambda: [])
+    minimum_payment_only: bool = False
 
     def borrowed_amounts(self) -> list[float]:
         need = self.annual_attendance_cost - self.annual_personal_contribution

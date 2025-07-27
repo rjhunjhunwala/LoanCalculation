@@ -7,9 +7,8 @@ from dataclasses import dataclass, field
 from math import ceil
 
 import loans
-from student_loans.loans import UserDefinedSource
 from student_loans.plans import StandardPlan, DirectSubsidizedFederal, DirectUnsubsidizedFederal, PrivateLoanFactory, \
-    PLUS_UNSUB, FundingSource, find_optimal_plan
+    PLUS_UNSUB, FundingSource, find_optimal_plan, UserDefinedSource
 from student_loans.person import Person
 
 
@@ -140,6 +139,8 @@ with st.expander("**Timelines**"):
     )
     min_dti, max_dti = min_dti / 100, max_dti / 100
 
+    min_payment_only = st.checkbox("I only will make the minimum payments. ", value=False,
+                                   help="Check this if you want to make only minimum payments on loans. This solver is most helpful when it helps you find ways to save money by paying loans off early. ")
     st.write("We will find a debt payoff plan within your constraints to minimize **lifetime total interest** paid.")
 
 with st.expander("**Current loan balances**", expanded=True):
@@ -148,7 +149,7 @@ with st.expander("**Current loan balances**", expanded=True):
                                 help="If you are already in college, you might have outstanding loans. ")
     for loan in range(1, num_loans + 1):
         loan_name = st.text_input(f"Existing Loan {loan} Name", f"Existing Loan {loan}")
-        curr_balance = st.number_input(label := f"Current Balance on loan_name", min_value=0.0, step=1.0,
+        curr_balance = st.number_input(label := f"Current Balance on {loan_name}", min_value=100.0, step=1.0,
                                        help="Current Balance on This Loan")
         add_currency_to_input(label)
 
@@ -159,12 +160,7 @@ with st.expander("**Current loan balances**", expanded=True):
         term = st.number_input(f"Loan {loan} Term:. ", value=10, step=1, min_value=0,
                                help="How long do you have to pay this loan off. ")
 
-        if subsidized_loan:
-            balance = curr_balance
-        else:
-            balance = curr_balance * (1 + rate) ** graduation_time
-
-        existing_loans.append((curr_balance, StandardPlan(rate, term), UserDefinedSource(loan_name, [StandardPlan(rate, term)])))
+        existing_loans.append((curr_balance, StandardPlan(rate, term), UserDefinedSource(loan_name, StandardPlan(rate, term), rate, subsidized_loan)))
 
 # --------------------------
 # Create Person
@@ -180,7 +176,8 @@ person = Person(
     max_dti=max_dti,
     payoff_min_length=payoff_min_length,
     payoff_max_length=payoff_max_length,
-    existing_loans={0:existing_loans}
+    existing_loans={0:existing_loans},
+    minimum_payment_only = min_payment_only,
 )
 
 # --------------------------
@@ -199,9 +196,8 @@ else:
         all_plans = {year: [] for year in range(graduation_time)}
         # flatten
         for year in range(graduation_time):
-            for loan_list in ({0:existing_loans}, yearly_optimal):
-                for balance, plan, src in loan_list.get(year, []):
-                    all_plans[year].append((balance, plan, src))
+            for balance, plan, src in yearly_optimal.get(year, []):
+                all_plans[year].append((balance, plan, src))
 
         # --------------------------
         # Group & Sum Plans
@@ -237,11 +233,13 @@ else:
             rep_plan = [info[year]["rep"] for year in info][0]
             src = [info[year]["src"] for year in info][0]
             initial_principal = sum(src.principal(info[year]["amount"], year, person) for year in info)
+            if initial_principal == 10000:
+                breakpoint()
             print(src, rep_plan)
             schedule = rep_plan.amortization_schedule(initial_principal, person, overpayments[src, rep_plan])
             total_paid = sum(row["payment"] for row in schedule)
             first_pmt = overpayments[src, rep_plan][0]
-            real_term = ceil(min([i for i in overpayments[src, rep_plan] if overpayments[src, rep_plan][i] < 1]) / 12)
+            real_term = ceil(min([rep_plan.term_years* 12] + [i for i in overpayments[src, rep_plan] if overpayments[src, rep_plan][i] < 1]) / 12)
             with st.expander(f"{plan_name} from {src_name} — Borrow ${total_borrowed:,.2f}"):
                 st.write(f"**Rate:** {rep_plan.annual_rate * 100:.2f}%")
                 st.write(f"**Term:** {rep_plan.term_years} years")

@@ -303,6 +303,7 @@ def find_optimal_plan(person: Person, sources: list[FundingSource]) -> dict[int,
     :return: A dict where for each year we say how much to borrow from which plan from which source.
     """
     model = Model(sense=minimize)
+    known_balances = {(plan, src): balance for balance, plan, src in person.existing_loans[0]}
 
     borrowed_from: dict[tuple[int, FundingSource, Plan], mip.Var] = {}
     used: dict[tuple[int, FundingSource, Plan], mip.Var] = {}
@@ -323,14 +324,27 @@ def find_optimal_plan(person: Person, sources: list[FundingSource]) -> dict[int,
                 used[(year, source, plan)] = used_var
                 model += var <= source.limit(year, person) * used_var
 
-    active_plan: dict[tuple[source, Plan], mip.Var] = {}
-    for source in sources:
+        for (plan, src), known_balance in known_balances.items():
+            print(known_balances)
+            var = model.add_var(var_type=CONTINUOUS, name=f"borrow_{year}_{src.name()}_{plan.__class__.__name__}", lb=0, ub=known_balance)
+            used_var = model.add_var(var_type=BINARY, name=f"use_{year}_{src.name()}_{plan.__class__.__name__}")
+            borrowed_from[(year, src, plan)] = var
+            used[(year, src, plan)] = used_var
+            if year == 0:
+                model += (var == known_balance)
+            else:
+                model += (var == 0)
+
+    active_plan: dict[tuple[FundingSource, Plan], mip.Var] = {}
+    known_balance_sources = [source for (plan, source) in known_balances]
+
+    for source in sources + known_balance_sources:
         for plan in source.plan_options(person):
             active_plan[(source, plan)] = model.add_var(var_type=BINARY)
         model += xsum(active_plan[(source, plan)] for plan in source.plan_options(person)) == 1
 
 
-    for source in sources:
+    for source in sources + known_balance_sources:
         for year in range(person.graduation_time):
             for plan in source.plan_options(person):
                 model += active_plan[(source, plan)] >= used[(year, source, plan)]
@@ -341,18 +355,18 @@ def find_optimal_plan(person: Person, sources: list[FundingSource]) -> dict[int,
     # Calculate the total borrowed per plan
     plan_balance = {
         (plan, s): model.add_var(var_type=CONTINUOUS)
-        for s in sources
+        for s in sources + known_balance_sources
         for plan in s.plan_options(person)
     }
 
     for (plan, s), var in plan_balance.items():
         model += var == xsum(
-        s.principal(borrowed_from[(year, s, plan)], year, person)
-        for year in range(person.graduation_time)
+            s.principal(borrowed_from[(year, s, plan)], year, person)
+            for year in range(person.graduation_time)
         )
 
     # Monthly constraints: balance update and DTI limits
-    for source in sources:
+    for source in sources + known_balance_sources:
         for plan in source.plan_options(person):
             r = plan.annual_rate / 12
             for month in range(0, plan.term_years * 12 ):
@@ -374,14 +388,21 @@ def find_optimal_plan(person: Person, sources: list[FundingSource]) -> dict[int,
 
                 i1 = model.add_var(var_type=BINARY, name=f"i1_{month}_{plan.__class__.__name__}")
                 i2 = model.add_var(var_type=BINARY, name=f"i2_{month}_{plan.__class__.__name__}")
+                s1 = model.add_var(lb=-1e6, ub =1e6 * (1 - person.minimum_payment_only))
+                s2 = model.add_var(lb=-1e6, ub=1e6 * (1 - person.minimum_payment_only))
+                model += s1 >= 1e6 * -i1
+                model += s1 <= 1e6 * i1
+                model += s2 >= 1e6 * -i2
+                model += s2 <= 1e6 * i2
+
 
                 # Enforce that exactly one of i1 or i2 is 1
                 model += i1 + i2 == 1 + (1 - active_plan[(source, plan)])
 
 
                 # Constrain payment to be >= i1 * balance + i2 * min_payment (min of the two)
-                model += payment[(month, source, plan)] >= min_formula - sum(person.borrowed_amounts()) * 2 * i2
-                model += payment[(month, source, plan)] >= full - sum(person.borrowed_amounts()) * 2 * i1
+                model += payment[(month, source, plan)] == min_formula + s1
+                model += payment[(month, source, plan)] == full + s2
 
                 model += payment[(month, source, plan)] <= full
                 model += payment[(month, source, plan)] >= 0
@@ -405,9 +426,40 @@ def find_optimal_plan(person: Person, sources: list[FundingSource]) -> dict[int,
     overpayments = dict()
     for year, source, plan in borrowed_from:
         amt = borrowed_from[(year, source, plan)].x
+        if type(source) == UserDefinedSource:
+            print(year, source, plan, amt)
         if amt > 1e-3:
             result[year].append((amt, plan, source))
             overpayments[source, plan] = {month: payment[(month, source, plan)].x for month in range(0, plan.term_years * 12)}
 
 
     return result, overpayments
+
+
+class UserDefinedSource(FundingSource):
+    """
+    Existing user defined loans
+    """
+    _name: str
+    _options: list
+    _rate: float
+
+    def __init__(self, name: str, plan: Plan, rate: float, subsidized: bool) -> None:
+        self._name = name
+        self._options = [plan]
+        self._rate = rate
+        self._subsidized = subsidized
+
+    def name(self):
+        return self._name
+
+    def _principal_m(self, year, person):
+        if self._subsidized:
+            return 1
+        else:
+            monthly = self._rate / 12
+            return ((1 + monthly) ** ((person.graduation_time - year) * 12))
+
+
+    def plan_options(self, person):
+        return self._options
