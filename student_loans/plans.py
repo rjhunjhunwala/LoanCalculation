@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from .constants import FEDERAL_ORIG_FEE, FEDERAL_RATE_SUBSIDIZED, FEDERAL_RATE_UNSUBSIDIZED, \
+from constants import FEDERAL_ORIG_FEE, FEDERAL_RATE_SUBSIDIZED, FEDERAL_RATE_UNSUBSIDIZED, \
     PLUS_UNSUB_RATE, PLUS_ORIG_FEE
-from .person import Person
+from person import Person
 
 from mip import Model, xsum, BINARY, CONTINUOUS, minimize
 
