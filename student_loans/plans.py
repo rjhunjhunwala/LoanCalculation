@@ -302,7 +302,15 @@ def find_optimal_plan(person: Person, sources: list[FundingSource]) -> dict[int,
     :param sources:
     :return: A dict where for each year we say how much to borrow from which plan from which source.
     """
-    model = Model(sense=minimize)
+    try:
+        model = Model(sense=minimize, backend="GRB")
+        model.set_param("MIPFocus", 3)  # Emphasize finding feasible solutions quickly
+        model.set_param("Presolve", 2)  # Aggressive presolve
+        model.set_param("Cuts", 0
+                        )  # Use more aggressive cuts
+        model.set_param("Heuristics", 0.5)  # Increase heuristic effort
+    except:
+        model = Model(sense=minimize, backend="CBC")
     known_balances = {(plan, src): balance for balance, plan, src in person.existing_loans[0]}
 
     borrowed_from: dict[tuple[int, FundingSource, Plan], mip.Var] = {}
@@ -397,7 +405,7 @@ def find_optimal_plan(person: Person, sources: list[FundingSource]) -> dict[int,
 
 
                 # Enforce that exactly one of i1 or i2 is 1
-                model += i1 + i2 == 1 + (1 - active_plan[(source, plan)])
+                model += i1 + i2 == 1
 
 
                 # Constrain payment to be >= i1 * balance + i2 * min_payment (min of the two)
