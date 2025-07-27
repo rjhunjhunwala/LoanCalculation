@@ -1,3 +1,3 @@
 streamlit
-mip[cbc]
 cffi==1.12
+mip[cbc]
