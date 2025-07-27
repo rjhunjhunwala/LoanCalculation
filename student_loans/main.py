@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from math import ceil
 
 import loans
-from student_loans.plans import StandardPlan, DirectSubsidizedFederal, DirectUnsubsidizedFederal, PrivateLoanFactory, \
+from .plans import StandardPlan, DirectSubsidizedFederal, DirectUnsubsidizedFederal, PrivateLoanFactory, \
     PLUS_UNSUB, FundingSource, find_optimal_plan, UserDefinedSource
-from student_loans.person import Person
+from .person import Person
 
 
 def add_currency_to_input(label, cur_symbol='$'):
