@@ -1,3 +1,3 @@
 streamlit
 cffi
-mip==1.8
+mip==1.14
