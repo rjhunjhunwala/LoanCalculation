@@ -310,7 +310,7 @@ def find_optimal_plan(person: Person, sources: list[FundingSource]) -> dict[int,
                         )  # Use more aggressive cuts
         model.set_param("Heuristics", 0.5)  # Increase heuristic effort
     except:
-        model = Model(sense=minimize, backend="CBC")
+        model = Model(sense=minimize)
     known_balances = {(plan, src): balance for balance, plan, src in person.existing_loans[0]}
 
     borrowed_from: dict[tuple[int, FundingSource, Plan], mip.Var] = {}
